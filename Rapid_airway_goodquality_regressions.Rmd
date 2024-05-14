@@ -1,0 +1,441 @@
+---
+title: "DysbIndex_RapidDec"
+author: "Sajan Raju"
+date: "2024-04-17"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: '2'
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Logistic regression (Dysbiosis index with other variables)
+<p> 
+<b> Result summary </b>
+
+</p>
+<br>
+
+```{r cars, echo=FALSE,  warning=FALSE,message = FALSE}
+library(readxl)
+library(dplyr)
+library(tidyverse)
+library(epiDisplay)
+library(gtsummary)
+```
+
+
+```{r cars, echo=FALSE,  warning=FALSE,message = FALSE}
+setwd("/Users/sajanruio.no/OneDrive - Universitetet i Oslo/cococmo/METAGENOMICS/Rcodes/RapidDecliners/")
+
+metadata_new<-read_excel("~/Library/CloudStorage/OneDrive-UniversitetetiOslo/cococmo/METAGENOMICS/Rcodes/RapidDecliners/metadata_spirodata_MGI_IDs_ver2.xlsx")
+# Load necessary libraries (if not already installed, install them with install.packages("package_name"))
+library(stats)
+#metadata_new
+data <-metadata_new
+ #omit NA
+data <- data[!is.na(data$DysbIndex_Gevers), ]
+#library(dplyr)
+data$Status_smoking_fu<-as.character(data$Status_smoking_bl)
+data$Ethnic<-as.character(data$Ethnic)
+data$Ethnic_cat<-as.character(data$Ethnic_cat)
+data <- data %>%
+      mutate(Ethnicity = ifelse(Ethnic == "Caucasian","Caucasian","Others"))
+
+```
+
+# Rapid Decliner
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data <- data[!is.na(data$Faster_decliner_FEV1), ]
+data <- data %>%
+      mutate(Faster_decliner_FEV1 = ifelse(Faster_decliner_FEV1 == "Non_faster",0,1))
+```
+
+## Crude model
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+model <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers, data = data, family="binomial")
+#summary(model)
+#exp(cbind("Odds ratio" = coef(model), confint.default(model, level = 0.95)))
+tbl_regression(model, exponentiate = TRUE)
+
+data$Age<- as.numeric(data$Age)
+
+```
+## Age sex bmi
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Age + Sex + BMI, data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## Smoke status (2 group)
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Status_smoking_bl , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## Smoke status (3 group)
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Status_smoking_bl , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## IL.10
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + IL.10 , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## IL.1b
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + IL.1b , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## CD4 nadir
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data1 <- data[!is.na(data$CD4_nadir), ]
+data1$CD4_nadir<-as.numeric(data1$CD4_nadir)
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + CD4_nadir , data = data1, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+
+## new covars - same as Rebekka paper
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data <- data[!is.na(data$Status_smoking_bl), ]
+data <- data[!is.na(data$Age), ]
+data <- data[!is.na(data$Sex), ]
+data <- data[!is.na(data$Ethnic), ]
+
+# Age and Transm_mode_BL
+model2_1 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Age + Sex +Ethnic_cat + Status_smoking_bl , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
+
+
+## HIV time and Transm mode
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+#data2 <- data[!is.na(data$HIV_time), ]
+#data2 <- data2[!is.na(data$Transm_mode_BL), ]
+
+# Age and Transm_mode_BL
+model2_1 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Age + Sex +BMI +Ethnicity + Status_smoking_bl +HIV_time + Transm_mode_BL+ IL.10 + IL.1b, data = data, family="binomial")
+
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
+
+## All - HIV time , Transm mode and CD4_nadir
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+#data2 <- data[!is.na(data$HIV_time), ]
+#data2 <- data2[!is.na(data$Transm_mode_BL), ]
+data$CD4_nadir<- as.numeric(data$CD4_nadir)
+# Age and Transm_mode_BL
+model2_1 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Age + Sex +BMI +Ethnicity + Status_smoking_bl +HIV_time + Transm_mode_BL+ IL.10 + IL.1b + CD4_nadir, data = data, family="binomial")
+
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
+
+<br>
+<br>
+
+# Airflow limitation - Pulmonary_comorbidity  GOLD
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data <- data[!is.na(data$Pulm_como), ]
+data <- data %>%
+      mutate(Pulm_como = ifelse(Pulm_como == "No",0,1))
+```
+
+## Crude model
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+model <- glm(Pulm_como ~ DysbIndex_Gevers, data = data, family="binomial")
+#summary(model)
+tbl_regression(model, exponentiate = TRUE)
+
+
+```
+
+## Age  
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Age, data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+## Sex  
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Sex, data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+## BMI  
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + BMI, data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+## Age sex bmi
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Age + Sex + BMI, data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+
+## Age sex 
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Age + Sex , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+## Age BMI 
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Age + BMI , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+## Sex BMI 
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + BMI + Sex , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+```
+## Ethnic
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform linear regression with age and sex as covariates
+model2_1 <- glm(Pulm_como ~ DysbIndex_Gevers + Ethnic_cat  , data = data, family="binomial")
+
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
+
+## smoke status (2 group)
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Current_smoker_fu , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## smoke status (3 group)
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + Status_smoking_fu , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## IL.10
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + IL.10 , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## IL.1b
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + IL.1b , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## CD4_nadir
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Pulm_como ~ DysbIndex_Gevers + CD4_nadir , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+
+## HIV time and Transm mode
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data2 <- data[!is.na(data$HIV_time), ]
+data2 <- data[!is.na(data$Transm_mode_BL), ]
+
+
+# Age and Transm_mode_BL
+model2_1 <- glm(Pulm_como ~ DysbIndex_Gevers + HIV_time + Transm_mode_BL, data = data2, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
+
+
+# Sensitivity analysis - ( only A+B+C=reproducible spirometry or ="good quality") 
+
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+metadata_new<-read_excel("metadata_spirodata_MGI_IDs_ver2.xlsx")
+# Load necessary libraries (if not already installed, install them with install.packages("package_name"))
+library(stats)
+#metadata_new
+data <-metadata_new
+ #omit NA
+data <- data[!is.na(data$DysbIndex_Gevers), ]
+#library(dplyr)
+data$Status_smoking_fu<-as.character(data$Status_smoking_fu)
+data$Ethnic<-as.character(data$Ethnic)
+data$Ethnic_cat<-as.character(data$Ethnic_cat)
+
+data <- data[!is.na(data$Faster_decliner_FEV1), ]
+data <- data %>%
+       mutate(Faster_decliner_FEV1 = ifelse(Faster_decliner_FEV1 == "Non_Rapid",0,1))
+
+data$Age<- as.numeric(data$Age)
+
+```
+
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data<-data %>% 
+  filter(Quality_fu == "A"  | Quality_fu == "B"  |Quality_fu == "C"  )
+#%>% 
+ # select(sex, height, fastest)
+
+data <- data[!is.na(data$Faster_decliner_FEV1), ]
+#data <- data %>%
+#      mutate(Faster_decliner_FEV1 = ifelse(Faster_decliner_FEV1 == "Non_Rapid",0,1))
+```
+
+## crude model
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+model <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers, data = data, family="binomial")
+#summary(model)
+#exp(cbind("Odds ratio" = coef(model), confint.default(model, level = 0.95)))
+tbl_regression(model, exponentiate = TRUE)
+
+```
+## age sex bmi
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Age + Sex + BMI, data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## smoke status (2 group)
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Current_smoker_fu , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## smoke status (3 group)
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Status_smoking_fu , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## IL.10
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + IL.10 , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## IL.1b
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# Perform log regression with age and sex as covariates
+model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + IL.1b , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+## CD4_nadir
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+# data <- data[!is.na(data$CD4_nadir), ]
+# data$CD4_nadir<-as.numeric(data$CD4_nadir)
+# # Perform log regression with age and sex as covariates
+# model2 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + CD4_nadir , data = data, family="binomial")
+# #exp(cbind("Odds ratio" = coef(model2), confint.default(model2, level = 0.95)))
+# tbl_regression(model2, exponentiate = TRUE)
+
+
+```
+
+## HIV time and Transm mode
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+#data2 <- data[!is.na(data$HIV_time), ]
+#data2 <- data2[!is.na(data$Transm_mode_BL), ]
+
+# Age and Transm_mode_BL
+model2_1 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers +HIV_time + Transm_mode_BL, data = data, family="binomial")
+
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
+
+## new covars - same as Rebekka paper
+```{r , echo=FALSE,  warning=FALSE,message = FALSE}
+data <- data[!is.na(data$Status_smoking_fu), ]
+data <- data[!is.na(data$Age), ]
+data <- data[!is.na(data$Sex), ]
+data <- data[!is.na(data$Ethnic), ]
+
+# Age and Transm_mode_BL
+model2_1 <- glm(Faster_decliner_FEV1 ~ DysbIndex_Gevers + Age + Sex +Ethnic_cat + Status_smoking_fu , data = data, family="binomial")
+#exp(cbind("Odds ratio" = coef(model2_1), confint.default(model2_1, level = 0.95)))
+tbl_regression(model2_1, exponentiate = TRUE)
+```
