@@ -1,0 +1,836 @@
+---
+title: "Diversity and differential abudance of microbial communities in Rapid lung function decliner"
+author: "Sajan Raju"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+---
+
+<p> Absolute abundance of the taxa retrived using the python script mentioned here https://forum.biobakery.org/t/merge-metaphlan-tables-py-with-absolute-abundance/1839 </p>
+# Load packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+library(tidyverse); packageVersion("tidyverse") 
+library(phyloseq); packageVersion("phyloseq")       
+library(microbiome); packageVersion("microbiome") 
+library(ggstatsplot); packageVersion("ggstatsplot")  
+library(readr); packageVersion("readr")  
+library(ggpubr); packageVersion("ggpubr") 
+library(hrbrthemes); packageVersion("hrbrthemes") 
+library(vegan); packageVersion("vegan") 
+library(readxl); packageVersion("readxl") 
+library(gtsummary); packageVersion("gtsummary") 
+library(arsenal); packageVersion("arsenal") 
+
+```
+# Set WD and load metaphlan output
+```{r, include=FALSE}
+
+setwd("~/OneDrive - Universitetet i Oslo/cococmo/METAGENOMICS/Rcodes/RapidDecliners/")
+s_abund <- read_tsv("~/OneDrive - Universitetet i Oslo/cococmo/METAGENOMICS/HumaNn_jointables/cocomo_all_mpa_ABS_sps.tsv")
+
+```
+
+# Seperate taxa
+
+```{r}
+s_tax_tab <- s_abund %>%
+  dplyr::rename("taxonomy" = "clade_name") %>%
+  dplyr::select(taxonomy) %>%
+  tidyr::separate(taxonomy, into = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"), sep = "\\|") %>%
+  dplyr::mutate(spec_row = Species) %>%
+  tibble::column_to_rownames(var = "spec_row")
+
+#head (s_tax_tab)
+``` 
+# Seperate OTU abudance
+
+```{r}
+s_otu_tab <- s_abund %>%
+  dplyr::rename("taxonomy" = "clade_name") %>%
+  tidyr::separate(taxonomy, into = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"), sep = "\\|") %>%
+  dplyr::select(-clade_taxid,-Kingdom, -Phylum, -Class, -Order, -Family, -Genus) %>%
+  tibble::column_to_rownames(var = "Species")
+#head(s_otu_tab,5,5)
+```
+
+# Load metadata
+```{r}
+GHmeta <- read_excel("~/OneDrive - Universitetet i Oslo/cococmo/METAGENOMICS/Rcodes/RapidDecliners/metadata_spirodata_MGI_IDs_ver2.xlsx")
+GHmeta$Rapid_decliner_FEV1<-as.character(GHmeta$Rapid_decliner_FEV1)
+GHmeta$Sex<-as.character(GHmeta$Sex)
+
+s_meta<-data.frame(GHmeta)
+s_meta <- s_meta %>%
+  dplyr::mutate(sampleNames_row = MGI_ID) %>%
+  tibble::column_to_rownames(var = "MGI_ID")
+
+str(s_meta)
+```
+# create phyloseq obj
+```{r}
+(ps_mpa3_species <- phyloseq(sample_data(s_meta),
+                             otu_table(s_otu_tab, taxa_are_rows = TRUE),
+                             tax_table(as.matrix(s_tax_tab))))
+ps_mpa3_species
+
+sample_data(ps_mpa3_species)$Rapid_decliner_FEV1 <- factor(sample_data(ps_mpa3_species)$Rapid_decliner_FEV1, levels = c("Non_Rapid", "Rapid"))
+
+# Remove samples with NA values from Rapid_decliner_FEV1
+ps_mpa3_species<-subset_samples(ps_mpa3_species, Rapid_decliner_FEV1!="NA")
+ps_mpa3_species
+
+newdata2<-meta(ps_mpa3_species)
+
+#sample info
+table1::table1(~ Rapid_decliner_FEV1 | Sex, data = newdata2)
+
+```
+# Descriptive table
+
+```{r}
+library(dplyr)
+newdata2 <- newdata2 %>% mutate_at(c('BMI','Age', 'HIV_time','CD4', 'TNFa', 'IL.1b', 'IL.2', 'IL.4', 'IL.6', 'IL.10', 'IL.17', 'IFNy', 'sCD14', 'sCD163','Annual_decline_FEV1', 'CD4_BL','CD4_nadir_BL','VL_BL'), as.numeric)
+
+newdata3 <- newdata2[ c(3:5,19:20, 24, 28,34:38, 51,54:60) ]
+
+summary_table <- newdata3 %>% 
+  tbl_summary(by = Rapid_decliner_FEV1,missing = 'no',
+              type = all_continuous() ~ "continuous2", #to add multiple summary lines
+              statistic = list(all_continuous() ~ c("{mean} ({sd})",
+                                                    "{median} ({min}, {max})"), 
+                               all_categorical() ~ "{n} ({p}%)"),
+              digits = all_continuous() ~ 1) %>% 
+  add_p() 
+
+summary_table
+```
+
+## Short decsriptive table 1
+```{r}
+summary_table2 <- newdata3 %>% 
+  tbl_summary(by = Rapid_decliner_FEV1,missing = 'no',
+              type = all_continuous() ~ "continuous2", #to add multiple summary lines
+              statistic = list(all_continuous() ~ c("{mean} ({sd})"
+                                                    ), 
+                               all_categorical() ~ "{n} ({p}%)"),
+              digits = all_continuous() ~ 1) %>% 
+  add_p() 
+
+summary_table2
+###
+```
+
+## Short decsriptive table 2
+```{r}
+newdata3 <- newdata3[!is.na(newdata3$Ethnic), ]
+newdata3 <- newdata3 %>%
+      mutate(Ethnicity = ifelse(Ethnic == "Caucasian","Caucasian","Others"))
+
+summary_table2_2 <- newdata3 %>% 
+  tbl_summary(by = Rapid_decliner_FEV1,missing = 'no',
+              type = all_continuous() ~ "continuous2", #to add multiple summary lines
+              statistic = list(all_continuous() ~ c("{mean} ({sd})"
+                                                    ), 
+                               all_categorical() ~ "{n} ({p}%)"),
+              digits = all_continuous() ~ 1) %>% 
+  add_p() 
+
+summary_table2_2
+
+```
+## Short decsriptive table 3
+
+```{r}
+
+
+newdata4 <- newdata2[ c(3:5,18:33, 34,47,51) ]
+#coco_metadata <- coco_metadata[ -c(2:4,27:30) ]
+
+summary_table <- newdata4 %>% 
+  tbl_summary(by = Rapid_decliner_FEV1,missing = 'no',
+              type = all_continuous() ~ "continuous2", #to add multiple summary lines
+              statistic = list(all_continuous() ~ c("{mean} ({sd})",
+                                                    "{median} ({min}, {max})"), 
+                               all_categorical() ~ "{n} ({p}%)"),
+              digits = all_continuous() ~ 1) %>% 
+  add_p() 
+
+summary_table
+```
+
+# Descriptive table for Airway flow limitation 
+```{r}
+# USE THE RAW PHYLOSEQ OBJECT
+(ps_mpa3_species <- phyloseq(sample_data(s_meta),
+                             otu_table(s_otu_tab, taxa_are_rows = TRUE),
+                             tax_table(as.matrix(s_tax_tab))))
+ps_mpa3_species
+ps_mpa3_species<-subset_samples(ps_mpa3_species, Pulm_como!="NA")
+
+ newdata4<-meta(ps_mpa3_species)
+ newdata4 <- newdata4 %>% mutate_at(c('BMI','Age', 'HIV_time','CD4', 'TNFa', 'IL.1b', 'IL.2', 'IL.4', 'IL.6', 'IL.10', 'IL.17', 'IFNy', 'sCD14', 'sCD163','Annual_decline_FEV1', 'CD4_BL','CD4_nadir_BL','VL_BL'), as.numeric)
+
+newdata4 <- newdata4[ c(3:5,18:20, 24, 28,35:38,54:60) ]
+
+summary_table <- newdata4 %>% 
+  tbl_summary(by = Pulm_como,
+              type = all_continuous() ~ "continuous2", #to add multiple summary lines
+              statistic = list(all_continuous() ~ c("{mean} ({sd})"
+                                                    ), 
+                               all_categorical() ~ "{n} ({p}%)"),
+              digits = all_continuous() ~ 1) %>% 
+  add_p() 
+
+summary_table
+
+
+#newdata4 <- newdata4[!is.na(newdata3$Ethnic), ]
+newdata4 <- newdata4 %>%
+      mutate(Ethnicity = ifelse(Ethnic == "Caucasian","Caucasian","Others"))
+
+summary_table2_2 <- newdata4 %>% 
+  tbl_summary(by = Pulm_como,
+              type = all_continuous() ~ "continuous2", #to add multiple summary lines
+              statistic = list(all_continuous() ~ c("{mean} ({sd})"
+                                                    ), 
+                               all_categorical() ~ "{n} ({p}%)"),
+              digits = all_continuous() ~ 1) %>% 
+  add_p() 
+
+summary_table2_2
+```
+
+
+# Relative abundance - Phylum level
+```{r}
+
+# USE THE RAW PHYLOSEQ OBJECT
+(ps_mpa3_species <- phyloseq(sample_data(s_meta),
+                             otu_table(s_otu_tab, taxa_are_rows = TRUE),
+                             tax_table(as.matrix(s_tax_tab))))
+ps_mpa3_species
+ps_mpa3_species<-subset_samples(ps_mpa3_species, Rapid_decliner_FEV1!="NA")
+ps_mpa3_species
+
+transform <- microbiome::transform
+# Merge rare taxa to speed up examples
+pseq <- transform(ps_mpa3_species, "compositional")
+pseq <- aggregate_rare(pseq, level = "Phylum", detection = 0.00001/100, prevalence = 10/100)
+pseq2<-pseq
+p4 <- plot_composition(pseq2,
+                       taxonomic.level = "Phylum",
+                       sample.sort = "Rapid_decliner_FEV1", group_by="Rapid_decliner_FEV1",
+                       x.label = "Rapid_decliner_FEV1") +
+  guides(fill = guide_legend(ncol = 1)) +   scale_fill_brewer("Phylum", palette = "Paired") +
+  scale_y_percent() +
+  labs(x = "Samples", y = "Relative abundance (%)",
+       title = "Relative abundance of taxonomic phylum")+
+       #subtitle = "in cocomo cohort",
+       #caption = "pulmonary comorbidities groups.") + 
+  theme_ipsum(grid="Y")+ 
+  #theme(axis.text.x = element_text(angle=90, hjust=1))+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+print(p4)
+ggsave("Rapid_decliner_FEV1_Phylum_RelativeAbundance_.jpg",bg="white",width=8, height=6)
+
+# Averaged by group
+p44 <- plot_composition(pseq2,
+                      average_by = "Rapid_decliner_FEV1", 
+                      transform = "compositional") +
+  scale_fill_brewer("Phylum", palette = "Paired") +
+  theme_ipsum(grid="Y") +
+  theme(axis.text.x = element_text(angle=0, hjust=1),
+        legend.text = element_text(face = "italic"))
+print(p44)
+ggsave("Rapid_decliner_FEV1_RelativeAbundance_Phylum_Groups.jpg",bg="white",width=8, height=6)
+
+
+```
+
+# Abundance of top phyla in Rapid_decliner_FEV1
+```{r taxaphy, fig.height=10, fig.width=12, echo=FALSE, fig.align="center", out.extra="id=logo"}
+#Agglomerate to phylum-level and rename
+ps_phylum <- phyloseq::tax_glom(ps_mpa3_species, "Phylum")
+phyloseq::taxa_names(ps_phylum) <- phyloseq::tax_table(ps_phylum)[, "Phylum"]
+phyloseq::otu_table(ps_phylum)[1:5, 1:5]
+
+#Melt and plot
+sample_data(ps_phylum)$Rapid_decliner_FEV1 <- factor(sample_data(ps_phylum)$Rapid_decliner_FEV1, levels = c("Non_Rapid", "Rapid"))
+
+phyloseq::psmelt(ps_phylum) %>%
+  ggplot(data = ., aes(x = Rapid_decliner_FEV1, y = Abundance)) +
+  geom_boxplot(outlier.shape  = NA) +  
+  geom_jitter(aes(color = Rapid_decliner_FEV1), height = 0, width = .2) +
+  labs(x = "", y = "Abundance\n") +theme(legend.position = "none")+
+  facet_wrap(~ OTU, scales = "free") + stat_compare_means( method = "wilcox.test") 
+
+ggsave("Rapid_decliner_FEV1_Stackplot_TopPhyla.jpg",bg="white",width=12, height=12)
+
+# log scaled
+phyloseq::psmelt(ps_phylum) %>%
+  ggplot(data = ., aes(x = Rapid_decliner_FEV1, y = log(Abundance))) +
+  geom_boxplot(outlier.shape  = NA) +  
+  geom_jitter(aes(color = Rapid_decliner_FEV1), height = 0, width = .2) +
+  labs(x = "", y = "log(Abundance)\n") +theme(legend.position = "none")+
+  facet_wrap(~ OTU, scales = "free") + stat_compare_means( method = "wilcox.test") 
+
+ggsave("Rapid_decliner_FEV1_Stackplot_TopPhyla_logscaled.jpg",bg="white",width=12, height=12)
+```
+
+
+# Alpha diversity plots  
+```{r}
+library(gtsummary)
+theme_set(theme_minimal(base_size = 18))
+# Plot alpha
+p.shannon <- boxplot_alpha(ps_mpa3_species, 
+                           index = "shannon",
+                           x_var = "Rapid_decliner_FEV1",
+                           fill.colors = c(Non_Rapid="cyan4", Rapid="deeppink4"))
+
+
+p.shannon <- p.shannon + theme_bw() + theme(legend.position = "none")+
+  labs(x="Rapid_decliner_FEV1", y="Shannon diversity") +
+  theme(axis.text = element_text(size=16),
+        axis.title.x = element_blank(),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=14),
+        legend.title = element_text(size=14))  +
+  theme(  plot.title=element_text( hjust=1, vjust=0.5, face='bold', margin=margin(t=40,b=-30)) )+
+  stat_compare_means( method = "wilcox.test") 
+
+p.shannon
+ggsave("Fig1_ShanNon_Rapiddecliner.jpg",bg="white",width=8, height=6,dpi = 300)
+
+
+p.inverse <- boxplot_alpha(ps_mpa3_species, 
+                        index = "inverse_simpson",
+                        x_var = "Rapid_decliner_FEV1",
+                        fill.colors = c(Non_Rapid="cyan4", Rapid="deeppink4"))
+
+p.inverse <- p.inverse + theme_minimal() + theme(legend.position = "none")+
+  labs(x="Rapid_decliner_FEV1", y=" Inverse Simpson") +
+  theme(axis.text = element_text(size=16),
+       axis.title.x = element_blank(),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=14),
+        legend.title = element_text(size=14))   +  
+  theme(  plot.title=element_text( hjust=1, vjust=0.5, face='bold', margin=margin(t=40,b=-30)) ) + 
+  stat_compare_means( method = "wilcox.test") 
+#
+p.inverse
+ggsave("Fig1_invSImpson_Fasterdecliner.jpg",bg="white",width=8, height=6, dpi = 300)
+
+
+p.chao <- boxplot_alpha(ps_mpa3_species, 
+                           index = "chao1",
+                           x_var = "Rapid_decliner_FEV1",
+                           fill.colors = c(Non_Rapid="cyan4", Rapid="deeppink4"))
+
+
+p.chao <- p.chao + theme_minimal() + theme(legend.position = "none")+
+  labs(x="Rapid_decliner_FEV1", y="Chao1 Index") +
+  theme(axis.text = element_text(size=12),
+        axis.title.x = element_blank(),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16)) +
+  theme(  plot.title=element_text( hjust=1, vjust=0.5, face='bold', margin=margin(t=40,b=-30)) ) +
+  stat_compare_means( method = "wilcox.test") 
+p.chao
+ggsave("Fig1_Chao1_Fasterdecliner.jpg",bg="white",width=8, height=6, dpi = 300)
+```
+
+
+# Betadiversity
+## Permanova unadjusted
+```{r}
+set.seed(1)
+
+#UNADJUSTED
+pseq.rel <- microbiome::transform(ps_mpa3_species, "compositional")
+metadf <- data.frame(sample_data(pseq.rel))
+
+mp_dist_matrix <- phyloseq::distance(ps_mpa3_species, method = "bray") 
+#Permanova analysis using Vegan (adonis)
+perma <- adonis2(mp_dist_matrix ~ Rapid_decliner_FEV1, data = metadf)
+perma
+
+#Dispersion test and plot
+dispr <- vegan::betadisper(mp_dist_matrix, phyloseq::sample_data(ps_mpa3_species)$Rapid_decliner_FEV1)
+dispr
+#Dispersion plot
+plot(dispr, main = "Ordination Centroids and Dispersion Labeled: Braycurtis Distance", sub = "")
+# Distance to centroid
+boxplot(dispr, main = "", xlab = "")
+
+```
+
+
+```{r}
+## Betadiv
+theme_set(theme_classic(base_size = 18))
+
+ordu.bray <- ordinate(ps_mpa3_species, "NMDS", "bray")
+
+# check for Eigen values
+# barplot(ordu.unwt.uni$values$Eigenvalues[1:10])
+
+nmds.bray <- plot_ordination(ps_mpa3_species, ordu.bray, color="Rapid_decliner_FEV1")+ 
+                 # fill.colors = c(Rapid="cyan4", Non_Rapid="deeppink4")+
+                  stat_ellipse(aes(group = Rapid_decliner_FEV1), linetype = 2)
+nmds.bray <- nmds.bray + ggtitle("Bray-Curtis dissimilarity index") + geom_point(size = 2.5)
+#+scale_fill_manual( values = c(Non_Rapid="cyan4", Rapid="deeppink4"))
+
+nmds.bray <- nmds.bray + theme_classic() + scale_colour_manual(values = c("cyan4", "deeppink4")) + theme(legend.position="bottom", plot.title = element_text(hjust = 1, vjust = -10)) +
+  theme(axis.text = element_text(size=16),
+       # axis.title.x = element_blank(),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=14),
+        legend.title = element_text(size=14))   +theme(legend.title=element_blank())
+## +
+##  annotate("text", x=0.9, y=-0.6, label= "adonis test P-value 0.001")+
+##  annotate("text", x=0.9, y=-0.7, label= "(adjusted age, gender and BMI)")
+  #scale_color_brewer("Rapid_decliner_FEV1", palette = "Set1")
+print(nmds.bray)
+
+ggsave("faster_Fig1c_Rapid_decliner_FEV1_betadiv_nmds2023.jpg",bg="white", width=6, height=6)
+
+
+```
+
+## Permanova adjusted
+
+<br> Covariates adjusted : Age , Sex, BMI a </p>
+```{r}
+
+psbd<-subset_samples(ps_mpa3_species, BMI!="NA")
+psbd
+psbd<-subset_samples(psbd, Age!="NA")
+psbd
+psbd<-subset_samples(psbd, Sex!="NA")
+psbd
+
+newdata2<-meta(psbd)
+#sample info after excluding samples with missing data
+table1::table1(~ Rapid_decliner_FEV1 | Sex, data = newdata2)
+
+
+pseq.rel <- microbiome::transform(psbd, "compositional")
+metadf <- data.frame(sample_data(pseq.rel))
+
+mp_dist_matrix <- phyloseq::distance(psbd, method = "bray") 
+#Permanova analysis using Vegan (adonis)
+perma <- adonis2(mp_dist_matrix ~ Rapid_decliner_FEV1 + Age + Sex + BMI , data = metadf)
+perma
+
+#Dispersion test and plot
+dispr <- vegan::betadisper(mp_dist_matrix, phyloseq::sample_data(psbd)$Rapid_decliner_FEV1)
+dispr
+#Dispersion plot
+plot(dispr, main = "Ordination Centroids and Dispersion Labeled: Braycurtis Distance", sub = "")
+# Distance to centroid
+boxplot(dispr, main = "", xlab = "")
+
+```
+
+## Permanova adjusted - new covars
+
+<br> Covariates adjusted : Age , Sex, ethnicity and smoking status a </p>
+```{r}
+
+psbd<-subset_samples(ps_mpa3_species, Ethnic!="NA")
+psbd
+psbd<-subset_samples(psbd, Age!="NA")
+psbd
+psbd<-subset_samples(psbd, Sex!="NA")
+psbd
+psbd<-subset_samples(psbd, Status_smoking_fu!="NA")
+psbd
+
+newdata2<-meta(psbd)
+#sample info after excluding samples with missing data
+table1::table1(~ Rapid_decliner_FEV1 | Sex, data = newdata2)
+
+
+pseq.rel <- microbiome::transform(psbd, "compositional")
+metadf <- data.frame(sample_data(pseq.rel))
+
+mp_dist_matrix <- phyloseq::distance(psbd, method = "bray") 
+#Permanova analysis using Vegan (adonis)
+perma <- adonis2(mp_dist_matrix ~ Rapid_decliner_FEV1 + Age + Sex + Ethnic + Status_smoking_fu , data = metadf)
+perma
+
+#Dispersion test and plot
+dispr <- vegan::betadisper(mp_dist_matrix, phyloseq::sample_data(psbd)$Rapid_decliner_FEV1)
+dispr
+#Dispersion plot
+plot(dispr, main = "Ordination Centroids and Dispersion Labeled: Braycurtis Distance", sub = "")
+# Distance to centroid
+boxplot(dispr, main = "", xlab = "")
+
+```
+
+# Differential abundance analysis using DESeq2
+```{r}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library("DESeq2")
+packageVersion("DESeq2")
+library(ggrepel)
+
+ps1<-ps_mpa3_species
+ps1
+ps1 = subset_samples(ps1, Rapid_decliner_FEV1 != " ")
+ps1
+ps1
+diagdds = phyloseq_to_deseq2(ps1, ~ Rapid_decliner_FEV1)
+
+diagdds$Rapid_decliner_FEV1 <- relevel(diagdds$Rapid_decliner_FEV1, ref = "Non_Rapid")
+
+dds<-estimateSizeFactors(diagdds, type = 'poscounts')
+#dds <- DESeq(dds, test="Wald")
+dds = DESeq(dds, test="Wald", fitType="parametric")
+
+res = results(dds, cooksCutoff = FALSE)
+alpha = 0.05
+res
+sigtab1 = res[which(res$padj < alpha), ]
+sigtab1
+sigtab1 = cbind(as(sigtab1, "data.frame"), as(tax_table(ps1)[rownames(sigtab1), ], "matrix"))
+#head(sigtab1,20)
+#Upregulated genes/taxa/pathways
+sigtab1 %>% filter(log2FoldChange > 0 & padj < 0.05)
+
+write.csv(sigtab1, "Rapid_decliner_FEV1_Deseq2_Taxa_output_unadj.csv", row.names=FALSE, quote=FALSE) 
+
+sigtab =as.data.frame(res)
+merged <- cbind(sigtab,tax_table(ps1))
+
+# add a column of NAs
+merged$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+merged$diffexpressed[merged$log2FoldChange > 0.6 & merged$pvalue < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+merged$diffexpressed[merged$log2FoldChange < -0.6 & merged$pvalue < 0.05] <- "DOWN"
+
+pvolc<-ggplot( merged, aes(x=log2FoldChange, y= -log10(pvalue),col=diffexpressed)) + geom_point()+theme_minimal(base_size = 12, base_rect_size = 5)+ 
+  geom_vline(xintercept=c(-2.5, 2.5), col="black", linetype="dashed") +  
+  geom_hline(yintercept=-log10(0.05), col="blue", linetype= "dashed")+ scale_color_manual(values=c("dark green", "black", "dark red"))+ scale_y_continuous(breaks = seq(0, 45, by = 5))
+
+pvolc
+#geom_text_repel(data=merged, aes(label=Genus))
+ggsave("faster_volcanoplt_deseq_Rapid_decliner_FEV1_unadj.jpg",bg="white")
+
+
+library("ggplot2")
+theme_set(theme_bw())
+scale_fill_discrete <- function(palname = "Set1", ...) {
+  scale_fill_brewer(palette = palname, ...)
+}
+# Phylum order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Phylum, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Phylum = factor(as.character(sigtab1$Phylum), levels=names(x))
+# Genus order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Species, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Species = factor(as.character(sigtab1$Species), levels=names(x))
+ggplot(sigtab1, aes(x=Species, y=log2FoldChange, color=Phylum)) + geom_point(size=6) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5))
+
+ggsave("faster_deseq2_taxa_unadjusted_pulmcomo_sps_unadj_1.png", width = 10)
+
+```
+
+# Differential abundance analysis using DESeq2 - adjusted
+```{r}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library("DESeq2")
+packageVersion("DESeq2")
+
+ps_mpa3_species
+psdeq<-subset_samples(ps_mpa3_species, BMI!="NA")
+psdeq
+psdeq<-subset_samples(psdeq, Age!="NA")
+psdeq
+psdeq<-subset_samples(psdeq, Sex!="NA")
+psdeq
+
+#library(DESeq2)
+library(ggrepel)
+
+ps1<-psdeq
+diagdds = phyloseq_to_deseq2(ps1, ~  Age +Sex +BMI+ Rapid_decliner_FEV1 )
+
+diagdds$Rapid_decliner_FEV1 <- relevel(diagdds$Rapid_decliner_FEV1, ref = "Non_Rapid")
+
+dds<-estimateSizeFactors(diagdds, type = 'poscounts')
+#dds <- DESeq(dds, test="Wald")
+dds = DESeq(dds, test="Wald", fitType="parametric")
+
+res = results(dds, cooksCutoff = FALSE)
+alpha = 0.05
+#res
+sigtab1 = res[which(res$padj < alpha), ]
+sigtab1 = cbind(as(sigtab1, "data.frame"), as(tax_table(ps1)[rownames(sigtab1), ], "matrix"))
+#head(sigtab1,20)
+#Upregulated genes/taxa/pathways
+sigtab1 %>% filter(log2FoldChange > 0)
+
+write.csv(sigtab1, "Faster_Rapid_decliner_FEV1_Deseq2_Taxa_output_adjustd_order.csv", row.names=FALSE, quote=FALSE) 
+
+sigtab =as.data.frame(res)
+merged <- cbind(sigtab,tax_table(ps1))
+
+# add a column of NAs
+merged$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+merged$diffexpressed[merged$log2FoldChange > 0.6 & merged$pvalue < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+merged$diffexpressed[merged$log2FoldChange < -0.6 & merged$pvalue < 0.05] <- "DOWN"
+
+pvolc<-ggplot( merged, aes(x=log2FoldChange, y= -log10(pvalue),col=diffexpressed)) + geom_point()+theme_minimal(base_size = 12, base_rect_size = 5)+ 
+  geom_vline(xintercept=c(-2.5, 2.5), col="black", linetype="dashed") +  
+  geom_hline(yintercept=-log10(0.05), col="blue", linetype= "dashed")+ scale_color_manual(values=c("dark green", "black", "dark red"))+ scale_y_continuous(breaks = seq(0, 45, by = 5))
+
+pvolc
+#geom_text_repel(data=merged, aes(label=Genus))
+ggsave("faster_volcanoplt_deseq_Rapid_decliner_FEV1_adjusted_order.jpg",bg="white")
+
+
+library("ggplot2")
+theme_set(theme_bw())
+scale_fill_discrete <- function(palname = "Set1", ...) {
+  scale_fill_brewer(palette = palname, ...)
+}
+# Phylum order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Phylum, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Phylum = factor(as.character(sigtab1$Phylum), levels=names(x))
+# Genus order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Species, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Species = factor(as.character(sigtab1$Species), levels=names(x))
+ggplot(sigtab1, aes(x=Species, y=log2FoldChange, color=Phylum)) + geom_point(size=6) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5))
+
+ggsave("faster_deseq2_taxa_unadjusted_pulmcomo_sps_adjusted_order.png", width = 10)
+
+```
+
+# Differential abundance analysis using DESeq2 - new covars adjusted
+```{r}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library("DESeq2")
+packageVersion("DESeq2")
+
+ps_mpa3_species
+
+
+psdeq<-subset_samples(ps_mpa3_species, Ethnic!="NA")
+psdeq
+psdeq<-subset_samples(psdeq, Age!="NA")
+psdeq
+psdeq<-subset_samples(psdeq, Sex!="NA")
+psdeq
+psdeq<-subset_samples(psdeq, Status_smoking_fu!="NA")
+psdeq
+
+#library(DESeq2)
+library(ggrepel)
+
+ps1<-psdeq
+diagdds = phyloseq_to_deseq2(ps1, ~  Age + Sex + Ethnic + Status_smoking_fu + Rapid_decliner_FEV1 )
+
+diagdds$Rapid_decliner_FEV1 <- relevel(diagdds$Rapid_decliner_FEV1, ref = "Non_Rapid")
+
+dds<-estimateSizeFactors(diagdds, type = 'poscounts')
+#dds <- DESeq(dds, test="Wald")
+dds = DESeq(dds, test="Wald", fitType="parametric")
+
+res = results(dds, cooksCutoff = FALSE)
+alpha = 0.05
+#res
+sigtab1 = res[which(res$padj < alpha), ]
+sigtab1 = cbind(as(sigtab1, "data.frame"), as(tax_table(ps1)[rownames(sigtab1), ], "matrix"))
+#head(sigtab1,20)
+#Upregulated genes/taxa/pathways
+sigtab1 %>% filter(log2FoldChange > 0)
+
+write.csv(sigtab1, "Rapid_decliner_FEV1_Deseq2_Taxa_output_adjustd_order.csv", row.names=FALSE, quote=FALSE) 
+
+sigtab =as.data.frame(res)
+merged <- cbind(sigtab,tax_table(ps1))
+
+# add a column of NAs
+merged$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+merged$diffexpressed[merged$log2FoldChange > 0.6 & merged$pvalue < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+merged$diffexpressed[merged$log2FoldChange < -0.6 & merged$pvalue < 0.05] <- "DOWN"
+
+pvolc<-ggplot( merged, aes(x=log2FoldChange, y= -log10(pvalue),col=diffexpressed)) + geom_point()+theme_minimal(base_size = 12, base_rect_size = 5)+ 
+  geom_vline(xintercept=c(-2.5, 2.5), col="black", linetype="dashed") +  
+  geom_hline(yintercept=-log10(0.05), col="blue", linetype= "dashed")+ scale_color_manual(values=c("dark green", "black", "dark red"))+ scale_y_continuous(breaks = seq(0, 45, by = 5))
+
+pvolc
+#geom_text_repel(data=merged, aes(label=Genus))
+ggsave("faster_volcanoplt_deseq_Rapid_decliner_FEV1_adjusted_order.jpg",bg="white")
+
+
+library("ggplot2")
+theme_set(theme_bw())
+scale_fill_discrete <- function(palname = "Set1", ...) {
+  scale_fill_brewer(palette = palname, ...)
+}
+# Phylum order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Phylum, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Phylum = factor(as.character(sigtab1$Phylum), levels=names(x))
+# Genus order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Species, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Species = factor(as.character(sigtab1$Species), levels=names(x))
+ggplot(sigtab1, aes(x=Species, y=log2FoldChange, color=Phylum)) + geom_point(size=6) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5))
+
+ggsave("faster_deseq2_taxa_unadjusted_pulmcomo_sps_adjusted_order.png", width = 10)
+
+```
+
+# DESeq2 - smoke status adjusted
+```{r}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library("DESeq2")
+packageVersion("DESeq2")
+
+ps_mpa3_species
+psdeq<-subset_samples(ps_mpa3_species, Current_smoker_fu!="NA")
+psdeq
+# psdeq<-subset_samples(psdeq, Current_smoker_fu!="NA")
+# psdeq
+
+#library(DESeq2)
+library(ggrepel)
+
+ps1<-psdeq
+diagdds = phyloseq_to_deseq2(ps1, ~  Current_smoker_fu + Rapid_decliner_FEV1 )
+
+diagdds$Rapid_decliner_FEV1 <- relevel(diagdds$Rapid_decliner_FEV1, ref = "Non_Rapid")
+
+dds<-estimateSizeFactors(diagdds, type = 'poscounts')
+#dds <- DESeq(dds, test="Wald")
+dds = DESeq(dds, test="Wald", fitType="parametric")
+
+res = results(dds, cooksCutoff = FALSE)
+alpha = 0.05
+#res
+sigtab1 = res[which(res$padj < alpha), ]
+sigtab1 = cbind(as(sigtab1, "data.frame"), as(tax_table(ps1)[rownames(sigtab1), ], "matrix"))
+#head(sigtab1,20)
+#Upregulated genes/taxa/pathways
+sigtab1 %>% filter(log2FoldChange > 0 & padj < 0.05)
+
+write.csv(sigtab1, "Rapid_decliner_FEV1_Deseq2_Taxa_output_SMOKE_adjustd_order.csv", row.names=FALSE, quote=FALSE) 
+
+sigtab =as.data.frame(res)
+merged <- cbind(sigtab,tax_table(ps1))
+
+# add a column of NAs
+merged$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+merged$diffexpressed[merged$log2FoldChange > 0.6 & merged$pvalue < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+merged$diffexpressed[merged$log2FoldChange < -0.6 & merged$pvalue < 0.05] <- "DOWN"
+
+pvolc<-ggplot( merged, aes(x=log2FoldChange, y= -log10(pvalue),col=diffexpressed)) + geom_point()+theme_minimal(base_size = 12, base_rect_size = 5)+ 
+  geom_vline(xintercept=c(-2.5, 2.5), col="black", linetype="dashed") +  
+  geom_hline(yintercept=-log10(0.05), col="blue", linetype= "dashed")+ scale_color_manual(values=c("dark green", "black", "dark red"))+ scale_y_continuous(breaks = seq(0, 45, by = 5))
+
+pvolc
+#geom_text_repel(data=merged, aes(label=Genus))
+ggsave("faster_volcanoplt_deseq_Rapid_decliner_FEV1_SMOKE_adjusted_order.jpg",bg="white")
+
+
+library("ggplot2")
+theme_set(theme_bw())
+scale_fill_discrete <- function(palname = "Set1", ...) {
+  scale_fill_brewer(palette = palname, ...)
+}
+# Phylum order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Phylum, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Phylum = factor(as.character(sigtab1$Phylum), levels=names(x))
+# Genus order
+x = tapply(sigtab1$log2FoldChange, sigtab1$Species, function(x) max(x))
+x = sort(x, TRUE)
+sigtab1$Species = factor(as.character(sigtab1$Species), levels=names(x))
+ggplot(sigtab1, aes(x=Species, y=log2FoldChange, color=Phylum)) + geom_point(size=6) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5))
+
+ggsave("faster_deseq2_taxa_unadjusted_pulmcomo_sps_SMOKE_adjusted_order.png", width = 10)
+
+```
+
+# Combine plots
+```{r,echo=FALSE,out.width = '100%'}
+# library
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+
+data1 <- read_csv("Rapid_decliner_FEV1_Deseq2_Taxa_output_SMOKE_adjustd_order.csv")
+
+data1 <- data1 %>%
+  mutate(Group = ifelse(log2FoldChange > 0 ,"High in Rapid decliner", "Low in Rapid decliner"))
+
+theme_set(theme_classic(base_size = 18))
+
+dsig<-data1 %>% mutate(Species = fct_reorder(Species, log2FoldChange)) %>% 
+  ggplot(aes(log2FoldChange, Species, color = Group ))+
+  geom_point() +
+  theme_classic() +
+  #theme_pubr()+ 
+  scale_colour_manual(values = c("deeppink4","cyan4" ))+ 
+  geom_segment( aes(x=0, xend=log2FoldChange, y=Species, yend=Species, color = Group)) +
+  geom_vline(xintercept = 0, size=0.4) +xlab("log2FoldChange") +ylab(NULL) +
+  theme(legend.position="bottom", plot.title = element_text(hjust = -10, vjust = -10))+
+  theme(axis.text = element_text(size=16),
+       # axis.title.x = element_blank(),
+        axis.title = element_text(size=16),
+        legend.text = element_text(size=14),
+        legend.title = element_text(size=14))  + theme(legend.title=element_blank())
+
+dsig
+ggsave("Fig1_d_FasterDec_geomseg_plot_ggpubr.jpeg", width = 7, height = 7)
+ggsave("Fig1_d_FasterDec_geomseg_plot1.jpeg", width = 20, height = 20, units = "cm")
+
+
+
+
+#ARRANGE
+library(patchwork)
+library(gridExtra)
+# ggarrange(nmds.bray, p.shannon, p.inverse, p.chao + rremove("x.text"), 
+#           labels = c("A", "B", "C","D"),
+#           ncol = 2, nrow = 2)
+# 
+# ggsave("faster_Rapid_decliner_FEV1_all_alpha_beta_taxa.jpg",bg="white", width=8, height=8)
+
+ (p.shannon + p.inverse) / (nmds.bray +dsig)  + plot_layout(widths = c(2, 2))  + plot_annotation(tag_levels = 'A') &
+  theme(plot.tag = element_text(face = 'bold'))
+
+ 
+
+ggsave("Fig_1a_d_Rapid_decliner_FEV1_300dpi.jpg",bg="white", width=15, height=14, dpi=300)
+ggsave("Fig_1a_d_Rapid_decliner_FEV1_300dpi_21.pdf",bg="white", width=15, height=15)
+
+
+```
+
